@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/satori/go.uuid"
 	"github.com/tecbot/gorocksdb"
 )
 
@@ -36,49 +35,58 @@ func doPut(db *gorocksdb.DB, from int, to int) <-chan putStat {
 
 	wo := gorocksdb.NewDefaultWriteOptions()
 
-	go func() {
-		for {
-			key := []byte(uuid.NewV4().String())
-			value := randBytes(from, to)
-			start := time.Now()
-			err := db.Put(wo, key, value)
-			if err != nil {
-				fmt.Println("dbPut error : ", err)
-				os.Exit(1)
-			}
-			delta := time.Since(start)
-			if delta > maxTime {
-				maxTime = delta
-			}
-			totalTime += delta
-			putCount++
-			if (putCount % loopCount) == 0 {
-				avgTime := totalTime / time.Duration(loopCount)
-				putStatCh <- putStat{maxTime, avgTime}
-				maxTime = 0
-				totalTime = 0
-			}
+	createDBEntry := func(key string) {
+		value := randBytes(from, to)
+		start := time.Now()
+		err := db.Put(wo, key, value)
+		if err != nil {
+			fmt.Println("dbPut error : ", err)
+			os.Exit(1)
 		}
+		delta := time.Since(start)
+		if delta > maxTime {
+			maxTime = delta
+		}
+		totalTime += delta
+		putCount++
+		if (putCount % loopCount) == 0 {
+			avgTime := totalTime / time.Duration(loopCount)
+			putStatCh <- putStat{maxTime, avgTime}
+			maxTime = 0
+			totalTime = 0
+		}
+	}
+	go func() {
+		for i, key := range filenames {
+			createDBEntry(key)
+		}
+		close(putStatCh)
 	}()
 	return putStatCh
 }
 
 func main() {
 	dbName := "/data/mydb"
-	compactionThreads := 4
+	cache := gorocksdb.NewLRUCache(512 * 1024 * 1024)
+	filter := gorocksdb.NewBloomFilter(15)
+	to := gorocksdb.NewDefaultBlockBasedTableOptions()
+	to.SetBlockSize(256 * 1024)
+	to.SetBlockCache(cache)
+	to.SetFilterPolicy(filter)
 	options := gorocksdb.NewDefaultOptions()
+	options.SetBlockBasedTableFactory(to)
 	options.SetCreateIfMissing(true)
-	options.SetStatsDumpPeriodSec(60 * 10) // dump stats at 10 minute interval
+	options.SetStatsDumpPeriodSec(60 * 1) // dump stats at 10 minute interval
 	options.SetCompactionStyle(gorocksdb.UniversalCompactionStyle)
-	options.IncreaseParallelism(compactionThreads)
-	options.IncreaseParallelism(compactionThreads)
+	options.SetWriteBufferSize(512 * 1024 * 1024)
+	options.SetMaxWriteBufferNumber(5)
+	options.SetMinWriteBufferNumberToMerge(2)
 	db, err := gorocksdb.OpenDb(options, dbName)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-
-	putStatch := doPut(db, 64*1024, 128*1024)
+	putStatch := doPut(db, 16*1024, 32*1024)
 	for {
 		p := <-putStatch
 		fmt.Println("avgTime ", p.avgTime, "maxTime", p.maxTime)
