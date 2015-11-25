@@ -5,7 +5,7 @@ var s3Client = new Minio({
   secretKey: 'YOUR-SECRETACCESSKEY',
   bucket: 'BUCKETNAME' // mandatory for all calls except listBuckets
   cloud: 'CLOUDNAME', // can be 'amazon', 'google' or 'minio'
-  minioEndpoint: 'https://minioServer.com', // needed only if cloud is minio, 
+  endpoint: 'https://minioServer.com', // needed only if cloud is minio, because if cloud is amazon endpoint will be https://bucketName.s3.amazonaws.com, if cloud is google endpoint will be https://bucketName.storage.googleapis.com
 })
 ```
 
