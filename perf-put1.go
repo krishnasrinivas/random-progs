@@ -14,7 +14,7 @@ import (
 )
 
 func usage() {
-	fmt.Println("perf <object-size-in-bytes> <parallel-upload-count>")
+	fmt.Println("perf <object-size-in-MB> <parallel-upload-count>")
 	os.Exit(0)
 }
 
@@ -29,6 +29,7 @@ func main() {
 		log.Print(err)
 		usage()
 	}
+	length = length * 1024 * 1024
 	nr, err := strconv.Atoi(os.Args[2])
 	if err != nil {
 		log.Print(err)
