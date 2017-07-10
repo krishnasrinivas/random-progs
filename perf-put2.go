@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"encoding/json"
+
 	minio "github.com/minio/minio-go"
 )
 
@@ -34,7 +36,7 @@ func uploadInLoop(client *minio.Core, f *os.File, size int64, bucket, objectPref
 	}
 }
 
-func performanceTest(client *minio.Core, f *os.File, bucket, objectPrefix string, objSize int64, threadCount int, timeToRun time.Duration) (bandwidth float64, objsPerSecint int) {
+func performanceTest(client *minio.Core, f *os.File, bucket, objectPrefix string, objSize int64, threadCount int, timeToRun time.Duration) (bandwidth float64, objsPerSecint float64) {
 	ch := make(chan transferUnit)
 	objCount := 0
 
@@ -51,7 +53,7 @@ func performanceTest(client *minio.Core, f *os.File, bucket, objectPrefix string
 			objCount++
 		case <-endCh:
 			bandwidth = float64(totalSize) / timeToRun.Seconds() / 1024 / 1024
-			return bandwidth, int(float64(objCount) / timeToRun.Seconds())
+			return bandwidth, float64(objCount) / timeToRun.Seconds()
 		}
 	}
 }
@@ -117,6 +119,19 @@ func main() {
 	for _, objSize := range objSizes {
 		removeObjects(bucket)
 		bandwidth, objsPerSec := performanceTest(client, f, bucket, objectPrefix, objSize, threadCount, time.Duration(int64(timeToRun)*int64(time.Second)))
-		fmt.Println(bandwidth, objsPerSec)
+		t := struct {
+			ObjSize     int64
+			ThreadCount int
+			Duration    int
+			Bandwidth   float64
+			ObjsPerSec  float64
+		}{
+			objSize, threadCount, timeToRun, bandwidth, objsPerSec,
+		}
+		b, err := json.Marshal(t)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(string(b))
 	}
 }
