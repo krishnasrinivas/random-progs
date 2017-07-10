@@ -28,7 +28,7 @@ func performanceTest(client *minio.Core, bucket, objectPrefix string, objSize in
 		go func(i int) {
 			defer wg.Done()
 			// Start all the goroutines at the same time
-			o, _, err := client.GetObject(bucket, objectPrefix, minio.RequestHeaders{})
+			o, _, err := client.GetObject(bucket, fmt.Sprintf("%s.%d", objectPrefix, i), minio.RequestHeaders{})
 			if err != nil {
 				fmt.Println(err)
 			}
