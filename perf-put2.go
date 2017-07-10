@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	minio "github.com/minio/minio-go"
@@ -17,7 +18,8 @@ type transferUnit struct {
 }
 
 func usage() {
-	fmt.Println("perf <object-size-in-MB> <thread-count> <time-in-secs>")
+	fmt.Println("perf <comma-seperated-object-sizes-in-MB> <thread-count> <time-in-secs>")
+	fmt.Println("perf 2,8,32,128 20 180 ---> runs 4 tests, each test with different object size, with 20 threads for 180 seconds")
 	os.Exit(0)
 }
 
@@ -32,16 +34,41 @@ func uploadInLoop(client *minio.Core, f *os.File, size int64, bucket, objectPref
 	}
 }
 
-func collectStats(endAfter time.Duration, ch <-chan transferUnit) {
-	endCh := time.After(endAfter)
+func performanceTest(client *minio.Core, f *os.File, bucket, objectPrefix string, objSize int64, threadCount int, timeToRun time.Duration) (bandwidth float64, objsPerSecint int) {
+	ch := make(chan transferUnit)
+	objCount := 0
+
+	for i := 0; i < threadCount; i++ {
+		go uploadInLoop(client, f, int64(objSize), bucket, objectPrefix, i, ch)
+	}
+
+	endCh := time.After(time.Duration(timeToRun))
 	var totalSize int64
 	for {
 		select {
 		case entry := <-ch:
 			totalSize += entry.s
+			objCount++
 		case <-endCh:
-			fmt.Println("bandwidth", float64(totalSize)/endAfter.Seconds()/1024/1024, "MBps")
-			return
+			bandwidth = float64(totalSize) / timeToRun.Seconds() / 1024 / 1024
+			return bandwidth, int(float64(objCount) / timeToRun.Seconds())
+		}
+	}
+}
+
+func removeObjects(bucket string) {
+	client, err := minio.New(os.Getenv("MINIO_ENDPOINT"), os.Getenv("MINIO_ACCESS_KEY"), os.Getenv("MINIO_SECRET_KEY"), false)
+	if err != nil {
+		log.Fatal(err)
+	}
+	listCh := client.ListObjects(bucket, "", true, nil)
+	for entry := range listCh {
+		if entry.Err != nil {
+			log.Fatal(err)
+		}
+		err = client.RemoveObject(bucket, entry.Key)
+		if entry.Err != nil {
+			log.Fatal(err)
 		}
 	}
 }
@@ -53,12 +80,16 @@ func main() {
 		usage()
 	}
 
-	objSize, err := strconv.Atoi(os.Args[1])
-	if err != nil {
-		log.Print(err)
-		usage()
+	objSizeStrs := strings.Split(os.Args[1], ",")
+	var objSizes []int64
+	for _, objSizeStr := range objSizeStrs {
+		objSize, err := strconv.Atoi(objSizeStr)
+		if err != nil {
+			log.Print(err)
+			usage()
+		}
+		objSizes = append(objSizes, int64(objSize*1024*1024))
 	}
-	objSize = objSize * 1024 * 1024
 
 	threadCount, err := strconv.Atoi(os.Args[2])
 	if err != nil {
@@ -83,12 +114,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	ch := make(chan transferUnit)
-
-	for i := 0; i < threadCount; i++ {
-		go uploadInLoop(client, f, int64(objSize), bucket, objectPrefix, i, ch)
+	for _, objSize := range objSizes {
+		removeObjects(bucket)
+		bandwidth, objsPerSec := performanceTest(client, f, bucket, objectPrefix, objSize, threadCount, time.Duration(int64(timeToRun)*int64(time.Second)))
+		fmt.Println(bandwidth, objsPerSec)
 	}
-
-	collectStats(time.Duration(int64(timeToRun)*int64(time.Second)), ch)
 }
