@@ -36,7 +36,7 @@ func uploadInLoop(client *minio.Core, f *os.File, size int64, bucket, objectPref
 	}
 }
 
-func performanceTest(client *minio.Core, f *os.File, bucket, objectPrefix string, objSize int64, threadCount int, timeToRun time.Duration) (bandwidth float64, objsPerSecint float64) {
+func performanceTest(client *minio.Core, f *os.File, bucket, objectPrefix string, objSize int64, threadCount int, timeToRun time.Duration) (bandwidth float64, objsPerSec float64) {
 	ch := make(chan transferUnit)
 	objCount := 0
 
