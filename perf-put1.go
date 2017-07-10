@@ -29,12 +29,10 @@ func performanceTest(client *minio.Core, f *os.File, bucket, objectPrefix string
 			defer wg.Done()
 			// Start all the goroutines at the same time
 			<-ch
-			fmt.Println("starting", i)
 			_, err := client.PutObject(bucket, fmt.Sprintf("%s.%d", objectPrefix, i), objSize, io.NewSectionReader(f, 0, objSize), nil, nil, nil)
 			if err != nil {
 				fmt.Println(err)
 			}
-			fmt.Println("ending", i)
 		}(i)
 	}
 	t1 := time.Now()
