@@ -17,6 +17,7 @@ import (
 
 func usage() {
 	fmt.Println("perf <object-size-in-MB> <parallel-upload-count>")
+	fmt.Println(`Run "echo 3 > /proc/sys/vm/drop_caches" before running the test so that there is no cache-effect.`)
 	os.Exit(0)
 }
 
@@ -32,7 +33,7 @@ func performanceTest(client *minio.Core, bucket, objectPrefix string, objSize in
 			if err != nil {
 				fmt.Println(err)
 			}
-			_, err = io.Copy(ioutil.Discard, o)
+			_, err = io.CopyN(ioutil.Discard, o, objSize)
 			if err != nil {
 				fmt.Println(err)
 			}
