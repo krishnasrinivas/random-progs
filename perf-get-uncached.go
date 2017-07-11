@@ -32,7 +32,10 @@ func performanceTest(client *minio.Core, bucket, objectPrefix string, objSize in
 			if err != nil {
 				fmt.Println(err)
 			}
-			io.Copy(ioutil.Discard, o)
+			_, err = io.Copy(ioutil.Discard, o)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}(i)
 	}
 	wg.Wait() // Wait till all go routines finish
@@ -54,7 +57,7 @@ func main() {
 		log.Print(err)
 		usage()
 	}
-
+	objSize = objSize * 1024 * 1024
 	threadCount, err := strconv.Atoi(os.Args[2])
 	if err != nil {
 		log.Print(err)
